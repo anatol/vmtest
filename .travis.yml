@@ -1,0 +1,6 @@
+language: golang
+dist: bionic
+go:
+  - master
+before_install:
+  - sudo apt-get -y install qemu
