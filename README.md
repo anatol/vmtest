@@ -10,6 +10,8 @@ In the following example `vmtest` sets up and lunches an instance of QEMU emulat
 package main
 
 import (
+	"fmt"
+	"regexp"
 	"testing"
 	"time"
 
@@ -52,6 +54,18 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	if err := qemu.ConsoleWrite("12345"); err != nil {
 		t.Fatal(err)
 	}
+
+	// Test the regexp matcher
+	re, err := regexp.Compile("exit_code=(\\d+)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches, err := qemu.ConsoleExpectRE(re)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("Exit code is %v", matches[0])
+
 	// Wait for some text again
 	if err := qemu.ConsoleExpect("You are in emergency mode. After logging in, type \"journalctl -xb\" to view"); err != nil {
 		t.Fatal(err)

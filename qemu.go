@@ -238,7 +238,42 @@ func sanitizeText(data []byte) []byte {
 	return data
 }
 
+// LineProcessor accepts byte array as input data. It returns whether processing has matched the input line
+// and thus processing need to be stopped.
+type LineProcessor func(data []byte) bool
+
+// ConsoleExpect waits until qemu console matches str
 func (q *Qemu) ConsoleExpect(str string) error {
+	match := []byte(str)
+	p := func(data []byte) bool {
+		return bytes.Contains(data, match)
+	}
+	return q.ConsoleProcess(p)
+}
+
+// ConsoleExpect waits until qemu console matches regexp provided by re
+// returns array of matched strings
+func (q *Qemu) ConsoleExpectRE(re *regexp.Regexp) ([]string, error) {
+	var matches []string
+	p := func(data []byte) bool {
+		m := re.FindAllSubmatch(data, -1)
+		if m == nil {
+			return false
+		}
+		for _, s := range m {
+			matches = append(matches, string(s[1]))
+		}
+		return true
+	}
+	err := q.ConsoleProcess(p)
+	if err != nil {
+		return nil, err
+	} else {
+		return matches, nil
+	}
+}
+
+func (q *Qemu) ConsoleProcess(p LineProcessor) error {
 	var buf [4096]byte
 	for {
 		num, err := q.console.Read(buf[:])
@@ -249,27 +284,28 @@ func (q *Qemu) ConsoleExpect(str string) error {
 		if num > 0 {
 			q.consoleData = append(q.consoleData, buf[:num]...)
 			idx := bytes.LastIndexByte(q.consoleData, '\n')
+			containsNewLine := idx != -1
 
-			if idx != -1 {
-				toPrint := q.consoleData[:idx+1]
-				containsPattern := bytes.Contains(toPrint, []byte(str))
-				if q.verbose {
-					_, _ = os.Stdout.Write(sanitizeText(toPrint))
-				}
+			var toPrint []byte
+			if containsNewLine {
+				toPrint = q.consoleData[:idx+1]
 				q.consoleData = q.consoleData[idx+1:]
-				if containsPattern {
-					return nil
-				}
+			} else {
+				// In some cases we want to check str on lines without '\n'.
+				// For example when the process prints "Please enter the password: '
+				toPrint = q.consoleData[:]
 			}
 
-			// In some cases we want to check str on lines without '\n'.
-			// For example when the process prints "Please enter the password: '
-			containsPattern := bytes.Contains(q.consoleData, []byte(str))
-			if containsPattern {
-				if q.verbose {
-					_, _ = os.Stdout.Write(q.consoleData)
+			if q.verbose {
+				_, _ = os.Stdout.Write(sanitizeText(toPrint))
+			}
+
+			matched := p(toPrint)
+
+			if matched {
+				if containsNewLine {
+					q.consoleData = []byte{}
 				}
-				q.consoleData = []byte{}
 				return nil
 			}
 		}

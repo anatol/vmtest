@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -89,6 +90,21 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	if err := qemu.ConsoleExpect("Run /init as init process"); err != nil {
 		t.Fatal(err)
 	}
+
+	// Test the regexp matcher
+	re, err := regexp.Compile("Listening on Journal Socket \\((.*)\\)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches, err := qemu.ConsoleExpectRE(re)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := [...]string{"/dev/log"}
+	if len(expected) != len(matches) || expected[0] != matches[0] {
+		t.Fatalf("expected %+v, got %+v", expected, matches)
+	}
+
 	// Write some text to console
 	if err := qemu.ConsoleWrite("12345"); err != nil {
 		t.Fatal(err)
