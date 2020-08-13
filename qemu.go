@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,15 +76,19 @@ type QemuOptions struct {
 }
 
 type Qemu struct {
-	cmd             *exec.Cmd
-	socketsDir      string
-	consoleListener net.Listener
-	console         net.Conn
-	monitorListener net.Listener
-	monitor         net.Conn
-	ctxCancel       context.CancelFunc
-	verbose         bool
-	consoleData     []byte
+	cmd                *exec.Cmd
+	socketsDir         string
+	consoleListener    net.Listener
+	console            net.Conn
+	consolePumpData    []byte
+	consolePumpMutex   sync.Mutex
+	consoleDataEOF     bool
+	consoleData        []byte
+	consoleDataArrived bool
+	monitorListener    net.Listener
+	monitor            net.Conn
+	ctxCancel          context.CancelFunc
+	verbose            bool
 }
 
 var _ VM = (*Qemu)(nil) // ensure Qemu implements VM interface
@@ -206,7 +212,59 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		ctxCancel:       ctxCancel,
 		verbose:         opts.Verbose,
 	}
+
+	go qemu.consolePump(opts.Verbose)
+
 	return qemu, nil
+}
+
+// List of escape sequences produced by Seabios/Linux
+var ansiRe = regexp.MustCompile(`\x1b(\[[0-9;]*m|c|\[\?7l|\[2J)`)
+
+func (q *Qemu) consolePump(verbose bool) {
+	var buf [4096]byte
+	dataLength := 0
+
+	for {
+		num, err := q.console.Read(buf[dataLength:])
+		if num > 0 {
+			dataLength += num
+			data := buf[:dataLength]
+
+			// remove ANSI escape sequences
+			if bytes.Contains(data, []byte{'\x1b'}) {
+				data = ansiRe.ReplaceAll(data, []byte{})
+				if bytes.Contains(data, []byte{'\x1b'}) {
+					// the sequence has not been removed, maybe it is an incomplete sequence? let's pump a little bit more
+					continue
+				}
+			}
+			dataLength = 0
+
+			if verbose {
+				_, _ = os.Stdout.Write(data)
+			}
+
+			q.consolePumpMutex.Lock()
+			q.consoleData = append(q.consoleData, data...)
+			q.consoleDataArrived = true
+			q.consolePumpMutex.Unlock()
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				q.consoleDataEOF = true
+			} else {
+				log.Print(err)
+			}
+			return
+		}
+
+		if num == 0 {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
 }
 
 func (q *Qemu) Stop() {
@@ -225,17 +283,6 @@ func (q *Qemu) Stop() {
 	if err := os.RemoveAll(q.socketsDir); err != nil {
 		log.Printf("Cannot remove temporary dir %v: %v", q.socketsDir, err)
 	}
-}
-
-var ansiRe = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
-var emptyLineRe = regexp.MustCompile("[\r\n]\\W*[\r\n]")
-
-// sanitizeText cleans the text before printing it to terminal.
-// This function removes dangerous ANSI escape symbols, empty lines, ...
-func sanitizeText(data []byte) []byte {
-	data = ansiRe.ReplaceAll(data, []byte{})
-	data = emptyLineRe.ReplaceAll(data, []byte{'\n'})
-	return data
 }
 
 // LineProcessor accepts byte array as input data. It returns whether processing has matched the input line
@@ -273,47 +320,57 @@ func (q *Qemu) ConsoleExpectRE(re *regexp.Regexp) ([]string, error) {
 	}
 }
 
-func (q *Qemu) ConsoleProcess(p LineProcessor) error {
-	var buf [4096]byte
+func (q *Qemu) ConsoleProcess(processor LineProcessor) error {
+	var buf []byte
 	for {
-		num, err := q.console.Read(buf[:])
-		if err != nil {
-			return err
-		}
+		q.consolePumpMutex.Lock()
+		buf = append(buf, q.consoleData...)
+		newDataArrived := q.consoleDataArrived
+		consoleDataEOF := q.consoleDataEOF
+		q.consoleData = nil
+		q.consoleDataArrived = false
+		q.consolePumpMutex.Unlock()
 
-		if num > 0 {
-			q.consoleData = append(q.consoleData, buf[:num]...)
-			idx := bytes.LastIndexByte(q.consoleData, '\n')
-			containsNewLine := idx != -1
+		if newDataArrived {
+			for {
+				var newLine bool
 
-			var toPrint []byte
-			if containsNewLine {
-				toPrint = q.consoleData[:idx+1]
-				q.consoleData = q.consoleData[idx+1:]
-			} else {
-				// In some cases we want to check str on lines without '\n'.
-				// For example when the process prints "Please enter the password: '
-				toPrint = q.consoleData[:]
-			}
-
-			if q.verbose {
-				_, _ = os.Stdout.Write(sanitizeText(toPrint))
-			}
-
-			matched := p(toPrint)
-
-			if matched {
-				if containsNewLine {
-					q.consoleData = []byte{}
+				idx := bytes.IndexByte(buf, '\n')
+				if idx == -1 {
+					// In some cases we want to check str on lines without '\n'.
+					// For example when the process prints "Please enter the password: '
+					idx = len(buf)
+				} else {
+					idx++ // remove trailing \n
+					newLine = true
 				}
-				return nil
-			}
-		}
+				toProcess := buf[:idx]
+				if newLine {
+					buf = buf[idx:]
+				}
 
-		if num < cap(buf) {
+				matched := processor(toProcess)
+
+				if matched {
+					// add non-processed data back to the pump
+					q.consolePumpMutex.Lock()
+					q.consoleData = append(buf, q.consoleData...)
+					q.consoleDataArrived = true
+					q.consolePumpMutex.Unlock()
+
+					return nil
+				}
+
+				if !newLine {
+					break
+				}
+			}
+		} else if consoleDataEOF {
+			return io.EOF
+		} else {
 			// QEMU did not fill the buffer completely. In this case let's sleep a bit and give QEMU
 			// a chance to do some work.
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 }
