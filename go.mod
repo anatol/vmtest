@@ -1,5 +1,5 @@
 module github.com/anatol/vmtest
 
-go 1.14
+go 1.15
 
-require golang.org/x/sys v0.0.0-20200406155108-e3b113bbe6a4
+require golang.org/x/sys v0.0.0-20200917073148-efd3b9a0ff20
