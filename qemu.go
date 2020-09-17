@@ -229,24 +229,33 @@ func (q *Qemu) consolePump(verbose bool) {
 		num, err := q.console.Read(buf[dataLength:])
 		if num > 0 {
 			dataLength += num
-			data := buf[:dataLength]
-
-			// remove ANSI escape sequences
-			if bytes.Contains(data, []byte{'\x1b'}) {
-				data = ansiRe.ReplaceAll(data, []byte{})
-				if bytes.Contains(data, []byte{'\x1b'}) {
-					// the sequence has not been removed, maybe it is an incomplete sequence? let's pump a little bit more
-					continue
-				}
-			}
+			toPrint := buf[:dataLength]
 			dataLength = 0
 
+			// remove ANSI escape sequences
+			if bytes.Contains(toPrint, []byte{'\x1b'}) {
+				toPrint = ansiRe.ReplaceAll(toPrint, []byte{})
+				// Sometimes ASCII sequences are not fully pumped to the buffer yet.
+				// Print out the beginning of the string but leave incomplete ASCII sequence in the buffer to process it later
+				asciiStart := bytes.LastIndexByte(toPrint, '\x1b')
+
+				const asciiSeqMaxLength = 30 // some sequences might be up to 20 symbols
+				if asciiStart != -1 && len(toPrint)-asciiStart < asciiSeqMaxLength {
+					// If incomplete ASCII sequence starts close to the end of the buffer
+					// then copy the sequence back to the beginning of buf and the rest is
+					// printed out.
+					copy(buf[:], toPrint[asciiStart:])
+					dataLength = len(toPrint) - asciiStart
+					toPrint = toPrint[:asciiStart]
+				}
+			}
+
 			if verbose {
-				_, _ = os.Stdout.Write(data)
+				_, _ = os.Stdout.Write(toPrint)
 			}
 
 			q.consolePumpMutex.Lock()
-			q.consoleData = append(q.consoleData, data...)
+			q.consoleData = append(q.consoleData, toPrint...)
 			q.consoleDataArrived = true
 			q.consolePumpMutex.Unlock()
 		}
