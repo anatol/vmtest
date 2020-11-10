@@ -10,6 +10,8 @@ Here are instructions that help to create it.
 make x86_64_defconfig
 make kvm_guest.config
 scripts/config -d MODULES
+# here enable modules you are interested in e.g.
+scripts/config -e DM_CRYPT -e CRYPTO_XTS
 make -j20
 # Now arch/x86/boot/bzImage contains the require binary. Copy it to your tests location.
 cp arch/x86/boot/bzImage $YOUR_TESTS_LOCATION
