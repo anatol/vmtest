@@ -172,7 +172,7 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		cmdline = append(cmdline, "-device", "virtio-scsi-pci,id=scsi")
 	}
 	for i, d := range opts.Disks {
-		cmdline = append(cmdline, "-drive", fmt.Sprintf("if=none,id=hd%v,file=%v", i, d),
+		cmdline = append(cmdline, "-drive", fmt.Sprintf("format=raw,if=none,id=hd%v,file=%v", i, d),
 			"-device", fmt.Sprintf("scsi-hd,drive=hd%v", i))
 	}
 
