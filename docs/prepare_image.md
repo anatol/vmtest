@@ -20,9 +20,9 @@ cp arch/x86/boot/bzImage $YOUR_TESTS_LOCATION
 ## Build an Arch Linux rootfs
 
 ```shell script
-dd if=/dev/zero of=rootfs.img bs=1G count=1
-mkfs.ext4 rootfs.img
-sudo losetup -fP rootfs.img
+dd if=/dev/zero of=rootfs.raw bs=1G count=1
+mkfs.ext4 rootfs.raw
+sudo losetup -fP rootfs.raw
 mkdir rootfs
 sudo mount /dev/loop0 rootfs
 sudo pacstrap rootfs base openssh
@@ -42,14 +42,19 @@ sudo rm rootfs/var/cache/pacman/pkg/*
 sudo umount rootfs
 sudo losetup -d /dev/loop0
 rm -r rootfs
-qemu-img convert -f raw -O qcow2 rootfs.img rootfs.qcow2
 ```
 
-You can quickly verify that this image boots file with
+To keep `rootfs.raw` unmodifiable it is a good idea to create a CoW overlay:
+
+```qemu-img create -o backing_file=rootfs.raw,backing_fmt=raw -f qcow2 rootfs.cow```
+
+`rootfs.cow` will contain any your changes that you make on top of read-only `rootfs.raw`.
+
+You can quickly verify that this image boots fine with
 
 ```
 qemu-system-x86_64 \
-  -drive file=rootfs.qcow2,index=0 \
+  -drive file=rootfs.cow,index=0 \
   -net user,hostfwd=tcp::10022-:22 -net nic \
   -nographic \
   -kernel bzImage -append "console=ttyS0 root=/dev/sda rw debug earlyprintk=serial"\
