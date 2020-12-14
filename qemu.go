@@ -62,6 +62,11 @@ const (
 	OS_LINUX
 )
 
+type QemuDisk struct {
+	Path   string
+	Format string // disk format
+}
+
 type QemuOptions struct {
 	Architecture    QemuArchitecture // specifies which architecture to emulate, runs qemu-system-$ARCHITECTURE
 	OperatingSystem OperatingSystem
@@ -70,7 +75,7 @@ type QemuOptions struct {
 	Timeout         time.Duration
 	Kernel          string
 	InitRamFs       string
-	Disks           []string
+	Disks           []QemuDisk
 	Append          []string // -append arguments
 	CdRom           string
 }
@@ -172,7 +177,11 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		cmdline = append(cmdline, "-device", "virtio-scsi-pci,id=scsi")
 	}
 	for i, d := range opts.Disks {
-		cmdline = append(cmdline, "-drive", fmt.Sprintf("format=raw,if=none,id=hd%v,file=%v", i, d),
+		format := ""
+		if d.Format != "" {
+			format = fmt.Sprintf("format=%s,", d.Format)
+		}
+		cmdline = append(cmdline, "-drive", format+fmt.Sprintf("if=none,id=hd%d,file=%s", i, d.Path),
 			"-device", fmt.Sprintf("scsi-hd,drive=hd%v", i))
 	}
 

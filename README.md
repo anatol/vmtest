@@ -32,8 +32,8 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 			"rd.luks.name=d4440324-32ed-44e6-a99f-5c18859b6bac=cryptroot",
 			"root=/dev/mapper/cryptroot",
 		},
-		Disks: []string{
-			"testdata/luksv2.disk",
+		Disks: []vmtest.QemuDisk{
+			{"testdata/luksv2.disk", "raw"},
 		},
 		Verbose: testing.Verbose(),
 		Timeout: 20 * time.Second,
@@ -225,7 +225,7 @@ func TestBootInQemu(t *testing.T) {
 		OperatingSystem: vmtest.OS_LINUX,
 		Kernel:          "bzImage",
 		Params:          []string{"-net", "user,hostfwd=tcp::10022-:22", "-net", "nic", "-enable-kvm", "-cpu", "host"},
-		Disks:           []string{"rootfs.qcow2"},
+		Disks:           []vmtest.QemuDisk{{"rootfs.qcow2", "qcow2"}},
 		Append:          []string{"root=/dev/sda", "rw"},
 		Verbose:         testing.Verbose(),
 		Timeout:         50 * time.Second,
