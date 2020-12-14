@@ -285,10 +285,7 @@ func (q *Qemu) consolePump(verbose bool) {
 
 }
 
-func (q *Qemu) Stop() {
-	if _, err := q.monitor.Write([]byte("quit\n")); err != nil {
-		log.Printf("monitor: %v", err)
-	}
+func (q *Qemu) wait() {
 	if err := q.cmd.Wait(); err != nil {
 		log.Printf("Got error while waiting for Qemu process completion: %v", err)
 	}
@@ -301,6 +298,20 @@ func (q *Qemu) Stop() {
 	if err := os.RemoveAll(q.socketsDir); err != nil {
 		log.Printf("Cannot remove temporary dir %v: %v", q.socketsDir, err)
 	}
+}
+
+func (q *Qemu) Kill() {
+	if _, err := q.monitor.Write([]byte("quit\n")); err != nil {
+		log.Printf("monitor: %v", err)
+	}
+	q.wait()
+}
+
+func (q *Qemu) Shutdown() {
+	if _, err := q.monitor.Write([]byte("system_powerdown\n")); err != nil {
+		log.Printf("monitor: %v", err)
+	}
+	q.wait()
 }
 
 // LineProcessor accepts byte array as input data. It returns whether processing has matched the input line

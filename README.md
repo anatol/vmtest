@@ -43,8 +43,8 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop QEMU at the end of the test case
-	defer qemu.Stop()
+	// Exit QEMU at the end of the test case
+	defer qemu.Kill()
 
 	// Wait until a specific string is found in the console output
 	if err := qemu.ConsoleExpect("Run /init as init process"); err != nil {
@@ -148,7 +148,7 @@ func TestRunArmInQemu(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer qemu.Stop()
+	defer qemu.Kill()
 
 	if err := qemu.ConsoleExpect("Hello from ARM emulator!"); err != nil {
 		t.Fatal(err)
@@ -235,8 +235,8 @@ func TestBootInQemu(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Stop QEMU at the end of the test case
-	defer qemu.Stop()
+	// Shutdown QEMU at the end of the test case
+	defer qemu.Shutdown()
 
 	config := &ssh.ClientConfig{
 		User:            "root",
