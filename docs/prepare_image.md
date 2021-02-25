@@ -25,7 +25,7 @@ mkfs.ext4 rootfs.raw
 sudo losetup -fP rootfs.raw
 mkdir rootfs
 sudo mount /dev/loop0 rootfs
-sudo pacstrap rootfs base openssh
+sudo pacstrap -c rootfs base openssh
 
 echo "[Match]
 Name=enp0s3
