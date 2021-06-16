@@ -82,6 +82,7 @@ type QemuOptions struct {
 
 type Qemu struct {
 	cmd                *exec.Cmd
+	waitCh             chan error
 	socketsDir         string
 	consoleListener    net.Listener
 	console            net.Conn
@@ -202,17 +203,41 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		return nil, fmt.Errorf("starting QEMU: %v", err)
 	}
 
+	waitCh := make(chan error, 1)
+	go func() {
+		err := cmd.Wait()
+		waitCh <- err
+		if err != nil {
+			ctxCancel()
+			// Interrupt the Accept() calls below, which would otherwise
+			// deadlock if qemu exits immediately:
+			monitorListener.Close()
+			consoleListener.Close()
+		}
+	}()
+
 	monitor, err := monitorListener.Accept()
 	if err != nil {
-		return nil, err
+		select {
+		case waitErr := <-waitCh:
+			return nil, waitErr
+		default:
+			return nil, err
+		}
 	}
 	console, err := consoleListener.Accept()
 	if err != nil {
-		return nil, err
+		select {
+		case waitErr := <-waitCh:
+			return nil, waitErr
+		default:
+			return nil, err
+		}
 	}
 
 	qemu := &Qemu{
 		cmd:             cmd,
+		waitCh:          waitCh,
 		socketsDir:      tempDir,
 		monitorListener: monitorListener,
 		monitor:         monitor,
@@ -286,7 +311,7 @@ func (q *Qemu) consolePump(verbose bool) {
 }
 
 func (q *Qemu) wait() {
-	if err := q.cmd.Wait(); err != nil {
+	if err := <-q.waitCh; err != nil {
 		log.Printf("Got error while waiting for Qemu process completion: %v", err)
 	}
 	q.ctxCancel()
