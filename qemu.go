@@ -158,7 +158,7 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 	if opts.OperatingSystem == OS_LINUX {
 		kernelArgs = append(kernelArgs, "console=ttyS0,115200", "ignore_loglevel")
 	}
-	if len(kernelArgs) > 0 {
+	if len(kernelArgs) > 0 && opts.Kernel != "" {
 		cmdline = append(cmdline, "-append", strings.Join(kernelArgs, " "))
 	}
 
