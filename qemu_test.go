@@ -17,33 +17,30 @@ func init() {
 	isTravis = os.Getenv("TRAVIS") != ""
 }
 
-func detectLinuxKernel() (kernel, initram string, err error) {
-	if _, err = os.Stat("/boot/vmlinuz-linux"); err == nil {
+// detectLinuxKernel returns path to kernel/initramfs at the current system
+func detectLinuxKernel() (string, string, error) {
+	if _, err := os.Stat("/boot/vmlinuz-linux"); err == nil {
 		// it looks like Arch Linux
-		kernel = "/boot/vmlinuz-linux"
-		initram = "/boot/initramfs-linux.img"
-		return
+		return "/boot/vmlinuz-linux", "/boot/initramfs-linux.img", nil
 	}
 
 	// Check if it is Debian?
 	var uts unix.Utsname
-	err = unix.Uname(&uts)
-	if err != nil {
-		err = fmt.Errorf("uname: %v", err)
-		return
+
+	if err := unix.Uname(&uts); err != nil {
+		return "", "", fmt.Errorf("uname: %v", err)
 	}
 	length := bytes.IndexByte(uts.Release[:], 0)
 	version := string(uts.Release[:length])
 
-	kernel = fmt.Sprintf("/boot/vmlinuz-%v", version)
-	initram = fmt.Sprintf("/boot/initrd.img-%v", version)
+	kernel := fmt.Sprintf("/boot/vmlinuz-%v", version)
+	initram := fmt.Sprintf("/boot/initrd.img-%v", version)
 
-	if _, err = os.Stat(kernel); err == nil {
-		return
+	if _, err := os.Stat(kernel); err != nil {
+		return "", "", fmt.Errorf("Cannot find Linux kernel file at this system")
 	}
 
-	err = fmt.Errorf("Cannot find Linux kernel file at this system")
-	return
+	return kernel, initram, nil
 }
 
 func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
