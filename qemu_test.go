@@ -89,7 +89,7 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	}
 
 	// Test the regexp matcher
-	re, err := regexp.Compile("Listening on Journal Socket \\((.*)\\)")
+	re, err := regexp.Compile(`Starting version (.*)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,9 +97,8 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := [...]string{"/dev/log"}
-	if len(expected) != len(matches) || expected[0] != matches[0] {
-		t.Fatalf("expected %+v, got %+v", expected, matches)
+	if len(matches) == 0 {
+		t.Fatalf("expected to match systemd version")
 	}
 
 	// Write some text to console
@@ -107,7 +106,7 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Wait for some text again
-	if err := qemu.ConsoleExpect("You are in emergency mode. After logging in, type \"journalctl -xb\" to view"); err != nil {
+	if err := qemu.ConsoleExpect("You are now being dropped into an emergency shell"); err != nil {
 		t.Fatal(err)
 	}
 }
