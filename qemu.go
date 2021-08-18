@@ -19,6 +19,7 @@ import (
 
 const qemuDefaultTimeout = 30 * time.Second
 
+// QemuArchitecture defines an architecture we launch QEMU for
 type QemuArchitecture string
 
 const (
@@ -62,24 +63,39 @@ const (
 	OS_LINUX
 )
 
+// QemuDisk represents a disk image supplied to qemu
 type QemuDisk struct {
-	Path   string
-	Format string // disk format
+	// Path is a filesystem path to the image
+	Path string
+	// Format is a disk format of the image e.g. 'raw' or 'qcow2'
+	Format string
 }
 
+// QemuOptions options for qemu vm initialization
 type QemuOptions struct {
-	Architecture    QemuArchitecture // specifies which architecture to emulate, runs qemu-system-$ARCHITECTURE
+	// Architecture specifies which architecture to emulate. It configures to run qemu-system-$ARCHITECTURE binary.
+	Architecture QemuArchitecture
+	// Operation system
 	OperatingSystem OperatingSystem
-	Params          []string // additional QEMU command line parameters
-	Verbose         bool
-	Timeout         time.Duration
-	Kernel          string
-	InitRamFs       string
-	Disks           []QemuDisk
-	Append          []string // -append arguments
-	CdRom           string
+	// additional QEMU command line parameters
+	Params []string
+	// Enable debug output
+	Verbose bool
+	// The qemu vm is killed after this timeout
+	Timeout time.Duration
+	// Kernel path to the kernel binary
+	Kernel string
+	// Path to ramfs image file
+	InitRamFs string
+	// Array of '-disk' parameters
+	Disks []QemuDisk
+	// Append specifies kernel parameters ('-append' qemu param)
+	Append []string
+	// Value of '-cdrom' parameter
+	CdRom string
 }
 
+// Qemu represents a VM that is started by vmtest library
 type Qemu struct {
 	cmd                *exec.Cmd
 	waitCh             chan error
@@ -112,6 +128,7 @@ func quoteCmdline(cmdline []string) string {
 	return strings.Join(args, " ")
 }
 
+// NewQemu creates a new qemu instance and starts it
 func NewQemu(opts *QemuOptions) (*Qemu, error) {
 	if opts.Timeout == 0 {
 		opts.Timeout = qemuDefaultTimeout
@@ -326,6 +343,7 @@ func (q *Qemu) wait() {
 	}
 }
 
+// Kill shuts down the vm using qemu's 'kill' command
 func (q *Qemu) Kill() {
 	if _, err := q.monitor.Write([]byte("quit\n")); err != nil {
 		log.Printf("monitor: %v", err)
@@ -333,6 +351,7 @@ func (q *Qemu) Kill() {
 	q.wait()
 }
 
+// Shutdown shuts down the vm using qemu's 'system_powerdown' command
 func (q *Qemu) Shutdown() {
 	if _, err := q.monitor.Write([]byte("system_powerdown\n")); err != nil {
 		log.Printf("monitor: %v", err)
@@ -350,10 +369,10 @@ func (q *Qemu) ConsoleExpect(str string) error {
 	p := func(data []byte) bool {
 		return bytes.Contains(data, match)
 	}
-	return q.ConsoleProcess(p)
+	return q.consoleProcess(p)
 }
 
-// ConsoleExpect waits until qemu console matches regexp provided by re
+// ConsoleExpectRE waits until qemu console matches regexp provided by re
 // returns array of matched strings
 func (q *Qemu) ConsoleExpectRE(re *regexp.Regexp) ([]string, error) {
 	var matches []string
@@ -367,15 +386,15 @@ func (q *Qemu) ConsoleExpectRE(re *regexp.Regexp) ([]string, error) {
 		}
 		return true
 	}
-	err := q.ConsoleProcess(p)
+	err := q.consoleProcess(p)
 	if err != nil {
 		return nil, err
-	} else {
-		return matches, nil
 	}
+
+	return matches, nil
 }
 
-func (q *Qemu) ConsoleProcess(processor LineProcessor) error {
+func (q *Qemu) consoleProcess(processor LineProcessor) error {
 	var buf []byte
 	for {
 		q.consolePumpMutex.Lock()
@@ -430,6 +449,7 @@ func (q *Qemu) ConsoleProcess(processor LineProcessor) error {
 	}
 }
 
+// ConsoleWrite writes given string to qemu console
 func (q *Qemu) ConsoleWrite(str string) error {
 	_, err := q.console.Write([]byte(str))
 	return err
