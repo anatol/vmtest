@@ -200,6 +200,7 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 	}
 	err = cmd.Start()
 	if err != nil {
+		ctxCancel()
 		return nil, fmt.Errorf("starting QEMU: %v", err)
 	}
 
