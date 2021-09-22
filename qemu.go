@@ -69,6 +69,8 @@ type QemuDisk struct {
 	Path string
 	// Format is a disk format of the image e.g. 'raw' or 'qcow2'
 	Format string
+	// Controller specified what drive controller is used for this disk, if empty then default "scsi-hd" is used
+	Controller string
 }
 
 // QemuOptions options for qemu vm initialization
@@ -199,8 +201,12 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		if d.Format != "" {
 			format = fmt.Sprintf("format=%s,", d.Format)
 		}
+		controller := d.Controller
+		if controller == "" {
+			controller = "scsi-hd"
+		}
 		cmdline = append(cmdline, "-drive", format+fmt.Sprintf("if=none,id=hd%d,file=%s", i, d.Path),
-			"-device", fmt.Sprintf("scsi-hd,drive=hd%v", i))
+			"-device", fmt.Sprintf("%s,drive=hd%v", controller, i))
 	}
 
 	if opts.Verbose {
