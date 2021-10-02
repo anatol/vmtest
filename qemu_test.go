@@ -132,3 +132,20 @@ func TestRunArmInQemu(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAnsiEscapeRemoval(t *testing.T) {
+	check := func(in, expected string) {
+		got := ansiRe.ReplaceAllString(in, "")
+		if expected != got {
+			t.Fatalf("expected %s got %s", expected, got)
+		}
+	}
+
+	// this test data represents sequences printed by qemu/seabios/ovmf/linux/..
+	check("drive=hd0\n\u001B[2J\u001B[01;01H\u001B[=3h\u001B[2J\u001B[01;01HBdsDxe: loading Boot0001", "drive=hd0\nBdsDxe: loading Boot0001")       // ovmf uefi
+	check("hd0\n\u001Bc\u001B[?7l\u001B[2J\u001B[0mSeaBIOS (version ArchLinux 1.14.0-1)", "hd0\nSeaBIOS (version ArchLinux 1.14.0-1)")              // seabios
+	check("ok\n\u001Bc\u001B[?7l\u001B[2J[    0", "ok\n[    0")                                                                                     // seabios
+	check("to \u001B[38;2;23;147;209mArch", "to Arch")                                                                                              // linux
+	check("[\u001B[0;32m  OK  \u001B[0m] Created slice \u001B[0;1;39mSlice /system/getty\u001B[0m.", "[  OK  ] Created slice Slice /system/getty.") // linux
+	check("30s)\n\u001BM\n\u001B[K[ ***  ] A start job is r", "30s)\n\n[ ***  ] A start job is r")                                                  // systemd
+}

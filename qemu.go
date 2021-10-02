@@ -277,7 +277,7 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 }
 
 // List of escape sequences produced by Seabios/Linux
-var ansiRe = regexp.MustCompile(`\x1b(\[[0-9;]*m|c|\[\?7l|\[2J)`)
+var ansiRe = regexp.MustCompile(`\x1b(c|M|\[(\d+;\d+H|=3h|[\d;]+m|\?7l|2J|K))`)
 
 func (q *Qemu) consolePump(verbose bool) {
 	var buf [4096]byte
