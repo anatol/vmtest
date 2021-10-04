@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
@@ -46,9 +47,7 @@ func detectLinuxKernel() (string, string, error) {
 func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	// Let's boot current system kernel, but we need to find out what is its path
 	kernel, initram, err := detectLinuxKernel()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// Check that the file is readable
 	var fd *os.File
 	if fd, err = os.Open(kernel); err != nil {
@@ -56,7 +55,7 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 		if isTravis {
 			t.Skip(msg)
 		} else {
-			t.Fatal(msg)
+			require.Fail(t, msg)
 		}
 	}
 	_ = fd.Close()
@@ -77,38 +76,26 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	}
 	// Run QEMU instance
 	qemu, err := NewQemu(&opts)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	// Stop QEMU at the end of the test case
 	defer qemu.Kill()
 
 	// Wait until a specific string is found in the console output
-	if err := qemu.ConsoleExpect("Run /init as init process"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, qemu.ConsoleExpect("Run /init as init process"))
 
 	// Test the regexp matcher
 	re, err := regexp.Compile(`Starting version (.*)`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	matches, err := qemu.ConsoleExpectRE(re)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(matches) == 0 {
-		t.Fatalf("expected to match systemd version")
-	}
+	require.NoError(t, err)
+
+	require.NotEmpty(t, matches, "expected to match systemd version")
 
 	// Write some text to console
-	if err := qemu.ConsoleWrite("12345"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, qemu.ConsoleWrite("12345"))
 	// Wait for some text again
-	if err := qemu.ConsoleExpect("You are now being dropped into an emergency shell"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, qemu.ConsoleExpect("You are now being dropped into an emergency shell"))
 }
 
 func TestRunArmInQemu(t *testing.T) {
@@ -123,22 +110,16 @@ func TestRunArmInQemu(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 	qemu, err := NewQemu(&opts)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer qemu.Kill()
 
-	if err := qemu.ConsoleExpect("Hello from ARM emulator!"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, qemu.ConsoleExpect("Hello from ARM emulator!"))
 }
 
 func TestAnsiEscapeRemoval(t *testing.T) {
 	check := func(in, expected string) {
 		got := ansiRe.ReplaceAllString(in, "")
-		if expected != got {
-			t.Fatalf("expected %s got %s", expected, got)
-		}
+		require.Equal(t, expected, got)
 	}
 
 	// this test data represents sequences printed by qemu/seabios/ovmf/linux/..
