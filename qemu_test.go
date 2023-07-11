@@ -22,7 +22,7 @@ func init() {
 func detectLinuxKernel() (string, string, error) {
 	if _, err := os.Stat("/boot/vmlinuz-linux"); err == nil {
 		// it looks like Arch Linux
-		return "/boot/vmlinuz-linux", "/boot/initramfs-linux.img", nil
+		return "/boot/vmlinuz-linux", "/boot/booster-linux.img", nil
 	}
 
 	// Check if it is Debian?
