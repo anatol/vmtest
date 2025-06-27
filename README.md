@@ -33,7 +33,7 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 			"root=/dev/mapper/cryptroot",
 		},
 		Disks: []vmtest.QemuDisk{
-			{"testdata/luksv2.disk", "raw"},
+			{Path: "testdata/luksv2.disk", Format: "raw"},
 		},
 		Verbose: testing.Verbose(),
 		Timeout: 20 * time.Second,
