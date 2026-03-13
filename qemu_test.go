@@ -116,6 +116,38 @@ func TestRunArmInQemu(t *testing.T) {
 	require.NoError(t, qemu.ConsoleExpect("Hello from ARM emulator!"))
 }
 
+func TestQuoteCmdline(t *testing.T) {
+	require.Equal(t, "foo bar", quoteCmdline([]string{"foo", "bar"}))
+	require.Equal(t, "'foo bar'", quoteCmdline([]string{"foo bar"}))
+	require.Equal(t, "-flag 'hello world'", quoteCmdline([]string{"-flag", "hello world"}))
+	require.Equal(t, `'it'\''s'`, quoteCmdline([]string{"it's"}))
+	require.Equal(t, "'a\tb'", quoteCmdline([]string{"a\tb"}))
+	require.Equal(t, "", quoteCmdline(nil))
+}
+
+func TestAppendWithoutKernel(t *testing.T) {
+	opts := QemuOptions{
+		Append: []string{"root=/dev/sda1"},
+	}
+	_, err := NewQemu(&opts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "opts.Append only allowed with opts.Kernel option")
+}
+
+func TestDefaultOptions(t *testing.T) {
+	opts := QemuOptions{}
+	// Mutate a copy to check defaults are applied
+	optsCopy := opts
+	if optsCopy.Timeout == 0 {
+		optsCopy.Timeout = qemuDefaultTimeout
+	}
+	if optsCopy.Architecture == "" {
+		optsCopy.Architecture = QEMU_X86_64
+	}
+	require.Equal(t, QEMU_X86_64, optsCopy.Architecture)
+	require.Equal(t, 30*time.Second, optsCopy.Timeout)
+}
+
 func TestAnsiEscapeRemoval(t *testing.T) {
 	check := func(in, expected string) {
 		got := ansiRe.ReplaceAllString(in, "")
