@@ -146,14 +146,21 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		return nil, err
 	}
 
+	cleanup := func() {
+		os.RemoveAll(tempDir)
+	}
+
 	monitorFile := path.Join(tempDir, "monitor.socket")
 	monitorListener, err := net.Listen("unix", monitorFile)
 	if err != nil {
+		cleanup()
 		return nil, err
 	}
 	consoleFile := path.Join(tempDir, "console.socket")
 	consoleListener, err := net.Listen("unix", consoleFile)
 	if err != nil {
+		monitorListener.Close()
+		cleanup()
 		return nil, err
 	}
 
@@ -174,6 +181,9 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 
 	if opts.Kernel == "" && len(opts.Append) > 0 {
 		// it comes from QEMU "qemu-system-x86_64: -append only allowed with -kernel option"
+		consoleListener.Close()
+		monitorListener.Close()
+		cleanup()
 		return nil, fmt.Errorf("opts.Append only allowed with opts.Kernel option")
 	}
 	kernelArgs := opts.Append
@@ -225,6 +235,9 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 	err = cmd.Start()
 	if err != nil {
 		ctxCancel()
+		consoleListener.Close()
+		monitorListener.Close()
+		cleanup()
 		return nil, fmt.Errorf("starting QEMU: %v", err)
 	}
 
