@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
+
 	"log"
 	"net"
 	"os"
@@ -141,7 +141,7 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		opts.Architecture = QEMU_X86_64
 	}
 
-	tempDir, err := ioutil.TempDir("", "vmtest")
+	tempDir, err := os.MkdirTemp("", "vmtest")
 	if err != nil {
 		return nil, err
 	}
