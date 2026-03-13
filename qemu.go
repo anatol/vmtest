@@ -122,7 +122,9 @@ var _ VM = (*Qemu)(nil) // ensure Qemu implements VM interface
 func quoteCmdline(cmdline []string) string {
 	args := make([]string, len(cmdline))
 	for i, s := range cmdline {
-		if strings.ContainsAny(s, " \t\n") {
+		if strings.ContainsAny(s, " \t\n'") {
+			// Escape single quotes by replacing ' with '\''
+			s = strings.ReplaceAll(s, "'", `'\''`)
 			args[i] = fmt.Sprintf("'%s'", s)
 		} else {
 			args[i] = s
