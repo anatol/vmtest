@@ -1,12 +1,10 @@
 module github.com/anatol/vmtest
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.26
 
 require (
-	github.com/stretchr/testify v1.10.0
-	golang.org/x/sys v0.31.0
+	github.com/stretchr/testify v1.11.1
+	golang.org/x/sys v0.42.0
 )
 
 require (
