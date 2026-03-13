@@ -307,18 +307,18 @@ func (q *Qemu) consolePump(verbose bool) {
 			// remove ANSI escape sequences
 			if bytes.Contains(toPrint, []byte{'\x1b'}) {
 				toPrint = ansiRe.ReplaceAll(toPrint, []byte{})
-				// Sometimes ASCII sequences are not fully pumped to the buffer yet.
-				// Print out the beginning of the string but leave incomplete ASCII sequence in the buffer to process it later
-				asciiStart := bytes.LastIndexByte(toPrint, '\x1b')
+				// Sometimes ANSI escape sequences are not fully pumped to the buffer yet.
+				// Print out the beginning of the string but leave incomplete ANSI escape sequence in the buffer to process it later
+				ansiStart := bytes.LastIndexByte(toPrint, '\x1b')
 
-				const asciiSeqMaxLength = 30 // some sequences might be up to 20 symbols
-				if asciiStart != -1 && len(toPrint)-asciiStart < asciiSeqMaxLength {
-					// If incomplete ASCII sequence starts close to the end of the buffer
+				const ansiSeqMaxLength = 30 // some sequences might be up to 20 symbols
+				if ansiStart != -1 && len(toPrint)-ansiStart < ansiSeqMaxLength {
+					// If incomplete ANSI escape sequence starts close to the end of the buffer
 					// then copy the sequence back to the beginning of buf and the rest is
 					// printed out.
-					copy(buf[:], toPrint[asciiStart:])
-					dataLength = len(toPrint) - asciiStart
-					toPrint = toPrint[:asciiStart]
+					copy(buf[:], toPrint[ansiStart:])
+					dataLength = len(toPrint) - ansiStart
+					toPrint = toPrint[:ansiStart]
 				}
 			}
 
