@@ -184,9 +184,6 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		cmdline = append(cmdline, "-append", strings.Join(kernelArgs, " "))
 	}
 
-	if opts.Architecture == "x86_64" {
-		// cmdline = append(cmdline, "-device", "e1000,netdev=net0", "-netdev", "user,id=net0,hostfwd=tcp::5555-:22")
-	}
 	if len(opts.Params) > 0 {
 		cmdline = append(cmdline, opts.Params...)
 	}
