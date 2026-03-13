@@ -161,4 +161,5 @@ func TestAnsiEscapeRemoval(t *testing.T) {
 	check("to \u001B[38;2;23;147;209mArch", "to Arch")                                                                                              // linux
 	check("[\u001B[0;32m  OK  \u001B[0m] Created slice \u001B[0;1;39mSlice /system/getty\u001B[0m.", "[  OK  ] Created slice Slice /system/getty.") // linux
 	check("30s)\n\u001BM\n\u001B[K[ ***  ] A start job is r", "30s)\n\n[ ***  ] A start job is r")                                                  // systemd
+	check("\x1b[45;9R\x1b[45;1R+q6E616D65\x1b[45;17R", "+q6E616D65")
 }
