@@ -321,7 +321,9 @@ func (q *Qemu) consolePump(verbose bool) {
 
 		if err != nil {
 			if err == io.EOF {
+				q.consolePumpMutex.Lock()
 				q.consoleDataEOF = true
+				q.consolePumpMutex.Unlock()
 			} else {
 				log.Print(err)
 			}
