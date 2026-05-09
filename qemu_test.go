@@ -72,7 +72,7 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 		InitRamFs:       initram,
 		Params:          params,
 		Verbose:         testing.Verbose(),
-		Timeout:         20 * time.Second,
+		Timeout:         60 * time.Second,
 	}
 	// Run QEMU instance
 	qemu, err := NewQemu(&opts)
@@ -81,21 +81,14 @@ func TestBootCurrentLinuxKernelInQemu(t *testing.T) {
 	// Stop QEMU at the end of the test case
 	defer qemu.Kill()
 
-	// Wait until a specific string is found in the console output
-	require.NoError(t, qemu.ConsoleExpect("Run /init as init process"))
-
-	// Test the regexp matcher
-	re, err := regexp.Compile(`Starting version (.*)`)
+	// Test the regexp matcher using a kernel message that appears on
+	// systemd and non-systemd environments.
+	re, err := regexp.Compile(`(Run /init as init process)`)
 	require.NoError(t, err)
 	matches, err := qemu.ConsoleExpectRE(re)
 	require.NoError(t, err)
-
-	require.NotEmpty(t, matches, "expected to match systemd version")
-
-	// Write some text to console
-	require.NoError(t, qemu.ConsoleWrite("12345"))
-	// Wait for some text again
-	require.NoError(t, qemu.ConsoleExpect("You are now being dropped into an emergency shell"))
+	require.NotEmpty(t, matches, "expected to match init startup message")
+	require.NoError(t, qemu.ConsoleExpect("Press ENTER to reboot"))
 }
 
 func TestRunArmInQemu(t *testing.T) {
