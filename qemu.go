@@ -3,6 +3,7 @@ package vmtest
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -14,6 +15,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -113,8 +116,13 @@ type Qemu struct {
 	consoleDataArrived bool
 	monitorListener    net.Listener
 	monitor            net.Conn
+	ctx                context.Context
 	ctxCancel          context.CancelFunc
 	verbose            bool
+	waitErr            error
+	waitOnce           sync.Once
+	closeOnce          sync.Once
+	exited             atomic.Bool
 }
 
 var _ VM = (*Qemu)(nil) // ensure Qemu implements VM interface
@@ -281,6 +289,7 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		socketsDir:      tempDir,
 		monitorListener: monitorListener,
 		monitor:         monitor,
+		ctx:             ctx,
 		consoleListener: consoleListener,
 		console:         console,
 		ctxCancel:       ctxCancel,
@@ -353,33 +362,57 @@ func (q *Qemu) consolePump(verbose bool) {
 }
 
 func (q *Qemu) wait() {
-	if err := <-q.waitCh; err != nil {
-		log.Printf("Got error while waiting for Qemu process completion: %v", err)
-	}
-	q.ctxCancel()
+	q.waitOnce.Do(func() {
+		q.waitErr = <-q.waitCh
+		q.exited.Store(true)
+		if q.waitErr != nil {
+			if errors.Is(q.waitErr, context.DeadlineExceeded) || errors.Is(q.ctx.Err(), context.DeadlineExceeded) {
+				log.Printf("Qemu process timed out and was terminated: %v", q.waitErr)
+			} else {
+				log.Printf("Got error while waiting for Qemu process completion: %v", q.waitErr)
+			}
+		}
+		q.ctxCancel()
+	})
+	q.closeOnce.Do(func() {
+		_ = q.console.Close()
+		_ = q.consoleListener.Close()
+		_ = q.monitor.Close()
+		_ = q.monitorListener.Close()
+		if err := os.RemoveAll(q.socketsDir); err != nil {
+			log.Printf("Cannot remove temporary dir %v: %v", q.socketsDir, err)
+		}
+	})
+}
 
-	_ = q.console.Close()
-	_ = q.consoleListener.Close()
-	_ = q.monitor.Close()
-	_ = q.monitorListener.Close()
-	if err := os.RemoveAll(q.socketsDir); err != nil {
-		log.Printf("Cannot remove temporary dir %v: %v", q.socketsDir, err)
+func isExpectedMonitorWriteErr(err error) bool {
+	return errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET)
+}
+
+func (q *Qemu) writeMonitor(cmd string) {
+	if q.exited.Load() {
+		return
+	}
+	if _, err := q.monitor.Write([]byte(cmd)); err != nil {
+		if isExpectedMonitorWriteErr(err) {
+			return
+		}
+		log.Printf("monitor: %v", err)
 	}
 }
 
 // Kill shuts down the vm using qemu's 'kill' command
 func (q *Qemu) Kill() {
-	if _, err := q.monitor.Write([]byte("quit\n")); err != nil {
-		log.Printf("monitor: %v", err)
-	}
+	q.writeMonitor("quit\n")
 	q.wait()
 }
 
 // Shutdown shuts down the vm using qemu's 'system_powerdown' command
 func (q *Qemu) Shutdown() {
-	if _, err := q.monitor.Write([]byte("system_powerdown\n")); err != nil {
-		log.Printf("monitor: %v", err)
-	}
+	q.writeMonitor("system_powerdown\n")
 	q.wait()
 }
 
