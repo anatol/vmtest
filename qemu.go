@@ -88,6 +88,8 @@ type QemuOptions struct {
 	Params []string
 	// Enable debug output
 	Verbose bool
+	// Output receives the guest console. Defaults to os.Stdout.
+	Output io.Writer
 	// The qemu vm is killed after this timeout
 	Timeout time.Duration
 	// Kernel path to the kernel binary
@@ -119,6 +121,7 @@ type Qemu struct {
 	ctx                context.Context
 	ctxCancel          context.CancelFunc
 	verbose            bool
+	output             io.Writer
 	waitErr            error
 	waitOnce           sync.Once
 	closeOnce          sync.Once
@@ -236,11 +239,16 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), opts.Timeout)
 
+	output := opts.Output
+	if output == nil {
+		output = os.Stdout
+	}
+
 	cmd := exec.CommandContext(ctx, qemuBinary, cmdline...)
 	if opts.Verbose {
 		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		cmd.Stdout = output
+		cmd.Stderr = output
 	}
 	err = cmd.Start()
 	if err != nil {
@@ -294,9 +302,10 @@ func NewQemu(opts *QemuOptions) (*Qemu, error) {
 		console:         console,
 		ctxCancel:       ctxCancel,
 		verbose:         opts.Verbose,
+		output:          output,
 	}
 
-	go qemu.consolePump(opts.Verbose)
+	go qemu.consolePump(opts.Verbose || opts.Output != nil)
 
 	return qemu, nil
 }
@@ -334,7 +343,7 @@ func (q *Qemu) consolePump(verbose bool) {
 			}
 
 			if verbose {
-				_, _ = os.Stdout.Write(toPrint)
+				_, _ = q.output.Write(toPrint)
 			}
 
 			q.consolePumpMutex.Lock()
